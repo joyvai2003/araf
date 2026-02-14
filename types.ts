@@ -22,7 +22,7 @@ export interface DueEntry {
   date: string;
   note?: string;
   timestamp: number;
-  customerPhoto?: string; // Base64 string of the image
+  customerPhoto?: string;
   isPaid?: boolean;
   paidDate?: string;
 }
@@ -56,12 +56,30 @@ export interface CashEntry {
   timestamp: number;
 }
 
+export interface UserProfile {
+  email: string;
+  name: string;
+  picture?: string;
+  googleId: string;
+}
+
 export interface AppSettings {
   password: string;
   openingCash: number;
   googleClientId?: string;
-  autoSyncPrompt?: boolean;
   autoSync: boolean;
+  user?: UserProfile;
+  language: 'bn' | 'en';
+}
+
+export interface FullAppState {
+  settings: AppSettings;
+  liveEntries: LiveEntry[];
+  expenses: Expense[];
+  nightEntries: NightEntry[];
+  cashEntries: CashEntry[];
+  dueEntries: DueEntry[];
+  uploadedDates: string[];
 }
 
 export type TransactionType = 'income' | 'expense';
@@ -73,8 +91,4 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   date: string;
-}
-
-export interface AppState {
-  uploadedDates: string[];
 }

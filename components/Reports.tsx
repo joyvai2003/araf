@@ -40,13 +40,6 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
     }
   }, [settings.googleClientId]);
 
-  useEffect(() => {
-    if (autoSyncEnabled && uploadStatus === 'idle' && tokenClientRef.current) {
-      handleSaveToDrive();
-      if (onAutoSyncHandled) onAutoSyncHandled();
-    }
-  }, [autoSyncEnabled, tokenClientRef.current]);
-
   const filteredLive = liveEntries.filter(e => e.date === filterDate);
   const filteredExp = expenses.filter(e => e.date === filterDate);
   const filteredNight = nightEntries.filter(n => n.date === filterDate);
@@ -58,6 +51,24 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
   const totalDueToday = filteredDue.reduce((sum, d) => sum + d.amount, 0);
 
   const isSynced = uploadedDates.includes(filterDate);
+
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current) return;
+    const element = reportRef.current;
+    const opt = {
+      margin: 5,
+      filename: `Report_ArafTelecom_${filterDate}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    try {
+      // @ts-ignore
+      await window.html2pdf().from(element).set(opt).save();
+    } catch (e) {
+      alert("PDF ডাউনলোড করতে সমস্যা হয়েছে।");
+    }
+  };
 
   const uploadFileToDrive = async (blob: Blob, accessToken: string) => {
     const filename = `Report_ArafTelecom_${filterDate}.pdf`;
@@ -106,7 +117,7 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
         const element = reportRef.current;
         const opt = {
           margin: 5,
-          filename: `Report_ArafTelecom_${filterDate}.pdf`,
+          filename: `Business_Report_${filterDate}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -125,32 +136,41 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
     }
   };
 
-  const getLiveLabel = (type: string) => {
+  const getLiveLabelEnglish = (type: string) => {
     switch (type) {
-      case 'photocopy': return 'ফটোকপি';
-      case 'color_print': return 'কালার প্রিন্ট';
-      case 'photo_print': return 'ফটো প্রিন্ট';
-      case 'online_apply': return 'অনলাইন আবেদন';
-      case 'due_collection': return 'বকেয়া আদায়';
-      case 'others': return 'অন্যান্য আয়';
+      case 'photocopy': return 'Photocopy';
+      case 'color_print': return 'Color Print';
+      case 'photo_print': return 'Photo Print';
+      case 'online_apply': return 'Online Application';
+      case 'due_collection': return 'Due Collection';
+      case 'others': return 'Other Income';
       default: return type;
     }
   };
 
-  const getNightLabel = (type: NightCategory) => {
+  const getNightLabelEnglish = (type: NightCategory) => {
     switch (type) {
-      case 'bkash_agent': return 'বিকাশ এজেন্ট';
-      case 'nagad_agent': return 'নগদ এজেন্ট';
-      case 'bkash_p1': return 'বিকাশ পার্সোনাল ১';
-      case 'bkash_p2': return 'বিকাশ পার্সোনাল ২';
-      case 'nagad_p1': return 'নগদ পার্সোনাল ১';
-      case 'nagad_p2': return 'নগদ পার্সোনাল ২';
-      case 'rocket': return 'রকেট';
-      case 'gp_load': return 'জিপি লোড';
-      case 'robi_load': return 'রবি লোড';
-      case 'minute_card': return 'মিনিট কার্ড';
-      case 'others': return 'অন্যান্য';
+      case 'bkash_agent': return 'bKash Agent';
+      case 'nagad_agent': return 'Nagad Agent';
+      case 'bkash_p1': return 'bKash Personal 1';
+      case 'bkash_p2': return 'bKash Personal 2';
+      case 'nagad_p1': return 'Nagad Personal 1';
+      case 'nagad_p2': return 'Nagad Personal 2';
+      case 'rocket': return 'Rocket';
+      case 'gp_load': return 'GP Topup';
+      case 'robi_load': return 'Robi Topup';
+      case 'minute_card': return 'Minute Card';
+      case 'others': return 'Other Digital';
       default: return type;
+    }
+  };
+
+  const confirmDelete = (type: 'live' | 'expense' | 'night' | 'due', id: string) => {
+    if (window.confirm('Are you sure you want to delete this entry?')) {
+      if (type === 'live') onDeleteLive(id);
+      if (type === 'expense') onDeleteExpense(id);
+      if (type === 'night') onDeleteNight(id);
+      if (type === 'due') onDeleteDue(id);
     }
   };
 
@@ -158,101 +178,173 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 no-print flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
-          <h2 className="font-bold text-slate-800">রিপোর্ট আর্কাইভ</h2>
+          <h2 className="font-bold text-slate-800">Report Archive</h2>
           {isSynced && <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-1 rounded-full animate-pulse">✅ SYNCED</span>}
         </div>
         <div className="flex gap-2">
+          <button onClick={handleDownloadPDF} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-md">
+            📥 Download PDF
+          </button>
           <button onClick={handleSaveToDrive} disabled={uploadStatus !== 'idle'} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${uploadStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
-            {uploadStatus === 'idle' ? '📤 ক্লাউড ব্যাকআপ' : uploadStatus === 'generating' ? '⏳ PDF তৈরি হচ্ছে' : '🚀 আপলোড হচ্ছে'}
+            {uploadStatus === 'idle' ? '📤 Cloud Backup' : uploadStatus === 'generating' ? '⏳ Generating PDF' : '🚀 Uploading...'}
           </button>
           <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none" />
         </div>
       </div>
 
-      <div ref={reportRef} className="bg-white p-8 rounded-[1rem] shadow-sm border border-slate-100 pdf-container">
-        {/* Professional PDF Header */}
-        <div className="border-b-4 border-slate-800 pb-4 mb-6 text-center">
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Araf Telecom And Computer</h1>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">ডেইলি বিজনেস স্টেটমেন্ট</p>
-          <p className="text-sm text-slate-800 font-black mt-1">তারিখ: {new Date(filterDate).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-        </div>
-
-        {/* Financial Summary Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-            <p className="text-[10px] text-emerald-600 font-black mb-1 uppercase">মোট আয়</p>
-            <p className="text-lg font-black text-emerald-800">৳ {totalIncome.toLocaleString('bn-BD')}</p>
-          </div>
-          <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 text-center">
-            <p className="text-[10px] text-rose-600 font-black mb-1 uppercase">মোট ব্যয়</p>
-            <p className="text-lg font-black text-rose-800">৳ {totalExpense.toLocaleString('bn-BD')}</p>
-          </div>
-          <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-center">
-            <p className="text-[10px] text-indigo-600 font-black mb-1 uppercase">ডিজিটাল</p>
-            <p className="text-lg font-black text-indigo-800">৳ {digitalTotal.toLocaleString('bn-BD')}</p>
-          </div>
-          <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-center">
-            <p className="text-[10px] text-amber-600 font-black mb-1 uppercase">নতুন বাকি</p>
-            <p className="text-lg font-black text-amber-800">৳ {totalDueToday.toLocaleString('bn-BD')}</p>
+      <div ref={reportRef} className="bg-white p-10 rounded-[1rem] shadow-sm border border-slate-100 pdf-container font-sans text-slate-900">
+        <div className="border-b-4 border-slate-900 pb-6 mb-8 text-center">
+          <h1 className="text-3xl font-black tracking-tight mb-1">Araf Telecom & Computer</h1>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.5em] mb-4">Official Business Statement</p>
+          <div className="flex justify-center gap-8 text-xs font-bold text-slate-600">
+            <span>Date: {new Date(filterDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            <span>Report ID: #AT-{filterDate.replace(/-/g, '')}</span>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">আয়ের বিবরণ</h3>
-            <table className="w-full text-[11px] border-collapse">
-              <thead><tr className="bg-slate-50"><th className="p-2 border border-slate-200 text-left">বিভাগ</th><th className="p-2 border border-slate-200 text-right">টাকা</th></tr></thead>
+        <div className="grid grid-cols-4 gap-4 mb-10">
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center">
+            <p className="text-[10px] text-slate-400 font-black mb-1 uppercase tracking-widest">Total Income</p>
+            <p className="text-xl font-black text-emerald-600">৳ {totalIncome.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center">
+            <p className="text-[10px] text-slate-400 font-black mb-1 uppercase tracking-widest">Total Expense</p>
+            <p className="text-xl font-black text-rose-600">৳ {totalExpense.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center">
+            <p className="text-[10px] text-slate-400 font-black mb-1 uppercase tracking-widest">Digital Bal.</p>
+            <p className="text-xl font-black text-indigo-600">৳ {digitalTotal.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center">
+            <p className="text-[10px] text-slate-400 font-black mb-1 uppercase tracking-widest">New Dues</p>
+            <p className="text-xl font-black text-amber-600">৳ {totalDueToday.toLocaleString('en-IN')}</p>
+          </div>
+        </div>
+
+        <div className="space-y-10">
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-6 bg-emerald-500 rounded-full"></div>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Income Breakdown</h3>
+            </div>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-white">
+                  <th className="p-3 text-left font-black uppercase tracking-widest">Description</th>
+                  <th className="p-3 text-right font-black uppercase tracking-widest">Amount (BDT)</th>
+                  <th className="p-3 text-center no-print">Action</th>
+                </tr>
+              </thead>
               <tbody>
                 {filteredLive.map(e => (
-                  <tr key={e.id}><td className="p-2 border border-slate-100">{getLiveLabel(e.type)}</td><td className="p-2 border border-slate-100 text-right font-bold">৳ {e.amount}</td></tr>
+                  <tr key={e.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="p-3 font-medium">{getLiveLabelEnglish(e.type)}</td>
+                    <td className="p-3 text-right font-black">৳ {e.amount.toLocaleString('en-IN')}</td>
+                    <td className="p-3 text-center no-print">
+                      <button onClick={() => confirmDelete('live', e.id)} className="text-rose-400 hover:text-rose-600 transition-colors">🗑️</button>
+                    </td>
+                  </tr>
                 ))}
+                {filteredLive.length === 0 && <tr><td colSpan={3} className="p-10 text-center text-slate-300 italic">No income entries found for this date.</td></tr>}
               </tbody>
             </table>
-          </div>
+          </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">নাইট সামারি</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead><tr className="bg-slate-50"><th className="p-2 border border-slate-200 text-left">অ্যাকাউন্ট</th><th className="p-2 border border-slate-200 text-right">ব্যালেন্স</th></tr></thead>
+          <div className="grid grid-cols-2 gap-10">
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Night Summary</h3>
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600">
+                    <th className="p-3 text-left font-black uppercase tracking-widest">Account</th>
+                    <th className="p-3 text-right font-black uppercase tracking-widest">Balance</th>
+                    <th className="p-3 text-center no-print">Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredNight.map(n => (
-                    <tr key={n.id}><td className="p-2 border border-slate-100">{getNightLabel(n.type)}</td><td className="p-2 border border-slate-100 text-right font-bold">৳ {n.amount.toLocaleString('bn-BD')}</td></tr>
+                    <tr key={n.id} className="border-b border-slate-100">
+                      <td className="p-3 font-medium">{getNightLabelEnglish(n.type)}</td>
+                      <td className="p-3 text-right font-black text-indigo-700">৳ {n.amount.toLocaleString('en-IN')}</td>
+                      <td className="p-3 text-center no-print">
+                        <button onClick={() => confirmDelete('night', n.id)} className="text-rose-400 transition-colors">🗑️</button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">ব্যয়ের বিবরণ</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead><tr className="bg-slate-50"><th className="p-2 border border-slate-200 text-left">খাত</th><th className="p-2 border border-slate-200 text-right">টাকা</th></tr></thead>
+            </section>
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-6 bg-rose-500 rounded-full"></div>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Expense Details</h3>
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600">
+                    <th className="p-3 text-left font-black uppercase tracking-widest">Item</th>
+                    <th className="p-3 text-right font-black uppercase tracking-widest">Cost</th>
+                    <th className="p-3 text-center no-print">Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredExp.map(e => (
-                    <tr key={e.id}><td className="p-2 border border-slate-100">{e.name}</td><td className="p-2 border border-slate-100 text-right font-bold text-rose-600">৳ {e.amount}</td></tr>
+                    <tr key={e.id} className="border-b border-slate-100">
+                      <td className="p-3 font-medium">{e.name}</td>
+                      <td className="p-3 text-right font-black text-rose-600">৳ {e.amount.toLocaleString('en-IN')}</td>
+                      <td className="p-3 text-center no-print">
+                        <button onClick={() => confirmDelete('expense', e.id)} className="text-rose-400 transition-colors">🗑️</button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </section>
           </div>
 
           {filteredDue.length > 0 && (
-            <div>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">আজকের বাকি তালিকা</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead><tr className="bg-slate-50"><th className="p-2 border border-slate-200 text-left">কাস্টমার</th><th className="p-2 border border-slate-200 text-left">মোবাইল</th><th className="p-2 border border-slate-200 text-right">টাকা</th></tr></thead>
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-6 bg-amber-500 rounded-full"></div>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Credit (Due) Records</h3>
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600">
+                    <th className="p-3 text-left font-black uppercase tracking-widest">Customer</th>
+                    <th className="p-3 text-left font-black uppercase tracking-widest">Phone</th>
+                    <th className="p-3 text-right font-black uppercase tracking-widest">Amount</th>
+                    <th className="p-3 text-center no-print">Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredDue.map(d => (
-                    <tr key={d.id}><td className="p-2 border border-slate-100">{d.customerName}</td><td className="p-2 border border-slate-100">{d.phone || '-'}</td><td className="p-2 border border-slate-100 text-right font-bold text-amber-600">৳ {d.amount}</td></tr>
+                    <tr key={d.id} className="border-b border-slate-100">
+                      <td className="p-3 font-black">{d.customerName}</td>
+                      <td className="p-3 text-slate-500">{d.phone || 'N/A'}</td>
+                      <td className="p-3 text-right font-black text-amber-700">৳ {d.amount.toLocaleString('en-IN')}</td>
+                      <td className="p-3 text-center no-print">
+                        <button onClick={() => confirmDelete('due', d.id)} className="text-rose-400 transition-colors">🗑️</button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </section>
           )}
         </div>
 
-        <div className="mt-12 pt-8 border-t border-slate-100 flex justify-between items-end">
-          <div className="text-[10px] text-slate-400 font-bold uppercase">Araf Telecom And Computer</div>
-          <div className="text-center w-32 border-t border-slate-800 pt-2"><p className="text-[10px] font-bold">স্বাক্ষর ও সীল</p></div>
+        <div className="mt-20 pt-10 border-t-2 border-slate-100 flex justify-between items-end">
+          <div className="space-y-2">
+            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">Statement Generated Digitally</p>
+            <p className="text-[10px] text-slate-500 font-bold">Araf Telecom & Computer Service</p>
+          </div>
+          <div className="text-center w-48 border-t-2 border-slate-900 pt-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-900">Authorized Signature</p>
+          </div>
         </div>
       </div>
     </div>
