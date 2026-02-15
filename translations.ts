@@ -1,4 +1,3 @@
-
 export const translations = {
   bn: {
     nav: { dashboard: 'হোম', entry: 'এন্ট্রি', dues: 'বাকি', reports: 'রিপোর্ট', settings: 'সেটিংস', assistant: 'এআই' },
@@ -108,4 +107,6 @@ export const translations = {
       language: 'Language'
     }
   }
-};
+} as const;
+
+export type TranslationType = typeof translations.bn;
