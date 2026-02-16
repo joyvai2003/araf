@@ -1,6 +1,6 @@
 
-import React, { useState, useRef } from 'react';
-import { AppSettings, LiveEntry, Expense } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { AppSettings, LiveEntry, Expense, NightEntry, CashEntry, DueEntry } from '../types';
 import { translations } from '../translations';
 
 interface Props {
@@ -8,20 +8,37 @@ interface Props {
   onUpdate: (s: AppSettings) => void;
   liveEntries: LiveEntry[];
   expenses: Expense[];
-  nightEntries: any[];
-  cashEntries: any[];
+  nightEntries: NightEntry[];
+  cashEntries: CashEntry[];
+  dueEntries: DueEntry[];
+  uploadedDates: string[];
   language: 'bn' | 'en';
+  onSyncSuccess: (data: any) => void;
 }
 
-const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, language }) => {
+const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, nightEntries, cashEntries, dueEntries, uploadedDates, language, onSyncSuccess }) => {
   const [pass, setPass] = useState(settings.password);
   const [cash, setCash] = useState(settings.openingCash.toString());
   const [clientId, setClientId] = useState(settings.googleClientId || '');
   const [isExporting, setIsExporting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const pdfExportRef = useRef<HTMLDivElement>(null);
+  const tokenClientRef = useRef<any>(null);
   
   const t = translations[language].settings;
   const currentOrigin = window.location.origin;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).google && settings.googleClientId) {
+      try {
+        tokenClientRef.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: settings.googleClientId.trim(),
+          scope: 'https://www.googleapis.com/auth/drive.file',
+          callback: '', 
+        });
+      } catch (e) { console.error("GIS Init Error:", e); }
+    }
+  }, [settings.googleClientId]);
 
   const handleSave = () => {
     const cleanId = clientId.trim();
@@ -34,6 +51,73 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
     alert(language === 'bn' ? 'সেটিংস সফলভাবে সেভ হয়েছে!' : 'Settings saved successfully!');
   };
 
+  const syncWithDrive = async () => {
+    if (!tokenClientRef.current) return alert("Google Client ID correctly set up?");
+    setSyncStatus('loading');
+
+    const fileName = "araf_telecom_sync_data.json";
+    const appData = {
+      liveEntries, expenses, nightEntries, cashEntries, dueEntries, uploadedDates,
+      lastUpdated: Date.now()
+    };
+
+    tokenClientRef.current.callback = async (response: any) => {
+      if (response.error) { setSyncStatus('error'); return; }
+      const token = response.access_token;
+
+      try {
+        // Search for existing file
+        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${fileName}'&fields=files(id)`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const { files } = await searchRes.json();
+
+        if (files && files.length > 0) {
+          // File exists - check if we should pull or push
+          const fileId = files[0].id;
+          if (window.confirm(language === 'bn' ? "গুগল ড্রাইভে আগের ডাটা পাওয়া গেছে। আপনি কি ক্লাউড থেকে ডাটা রিস্টোর করতে চান? (না চাইলে আপনার বর্তমান ডাটা ড্রাইভে সেভ হবে)" : "Found existing cloud data. Restore from Cloud? (Cancel to overwrite with current data)")) {
+            // Pull
+            const pullRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const cloudData = await pullRes.json();
+            onSyncSuccess(cloudData);
+            setSyncStatus('success');
+            alert(language === 'bn' ? "ডাটা সফলভাবে রিস্টোর হয়েছে!" : "Data restored successfully!");
+          } else {
+            // Push (Update)
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(appData)
+            });
+            setSyncStatus('success');
+            alert(language === 'bn' ? "ডাটা সফলভাবে ব্যাকআপ হয়েছে!" : "Data backed up successfully!");
+          }
+        } else {
+          // Create new file
+          const metadata = { name: fileName, mimeType: 'application/json' };
+          const form = new FormData();
+          form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          form.append('file', new Blob([JSON.stringify(appData)], { type: 'application/json' }));
+
+          await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form
+          });
+          setSyncStatus('success');
+          alert(language === 'bn' ? "প্রথমবারের মতো ক্লাউড ব্যাকআপ সফল হয়েছে!" : "First cloud backup successful!");
+        }
+      } catch (e) {
+        setSyncStatus('error');
+        alert("Sync Failed.");
+      }
+    };
+
+    tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+  };
+
   const copyOrigin = () => {
     navigator.clipboard.writeText(currentOrigin);
     alert(language === 'bn' ? 'ইউআরএল কপি হয়েছে!' : 'URL Copied!');
@@ -42,7 +126,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
   const exportToPDF = async () => {
     if (!pdfExportRef.current) return;
     setIsExporting(true);
-
     const element = pdfExportRef.current;
     const opt = {
       margin: 10,
@@ -51,15 +134,11 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
-
     try {
       // @ts-ignore
       await window.html2pdf().from(element).set(opt).save();
-    } catch (err) {
-      alert("Error generating full report.");
-    } finally {
-      setIsExporting(false);
-    }
+    } catch (err) { alert("Error generating report."); }
+    finally { setIsExporting(false); }
   };
 
   const allTransactions = [
@@ -70,6 +149,25 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom duration-500 pb-10">
       
+      {/* Cloud Sync Section */}
+      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-[2.5rem] shadow-xl text-white">
+        <h2 className="text-xl font-bold flex items-center gap-2 mb-2">
+          <span>🔄</span> {language === 'bn' ? 'ডিভাইস সিঙ্ক' : 'Device Sync'}
+        </h2>
+        <p className="text-indigo-100 text-xs mb-6 leading-relaxed">
+          {language === 'bn' 
+            ? 'ল্যাপটপ এবং মোবাইলে একই হিসাব দেখতে এই বাটনটি ব্যবহার করুন। আপনার সব হিসাব গুগল ড্রাইভে সুরক্ষিত থাকবে।' 
+            : 'Use this to sync data across laptop and mobile. Your ledger will be safely stored in Google Drive.'}
+        </p>
+        <button 
+          onClick={syncWithDrive}
+          disabled={syncStatus === 'loading'}
+          className={`w-full py-5 rounded-[1.8rem] font-black text-xs uppercase tracking-widest shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${syncStatus === 'loading' ? 'bg-white/20' : 'bg-white text-indigo-600'}`}
+        >
+          {syncStatus === 'loading' ? '⏳ Syncing...' : (language === 'bn' ? 'ড্রাইভের সাথে সিঙ্ক করুন' : 'Sync with Google Drive')}
+        </button>
+      </div>
+
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <span>⚙️</span> {t.title}
@@ -85,7 +183,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
              </div>
              <div className="text-[11px] text-blue-700 space-y-3 leading-relaxed font-medium">
                 <p>১. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline font-bold">Google Cloud Console</a>-এ গিয়ে <b>Web Application</b> আইডি তৈরি করুন।</p>
-                
                 <div className="bg-white/60 p-3 rounded-2xl space-y-2">
                    <p className="font-bold text-blue-900 uppercase text-[9px]">ধাপ ২: এই ইউআরএলটি 'Authorized JavaScript Origins' এ দিন:</p>
                    <div className="flex items-center gap-2">
@@ -93,13 +190,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
                       <button onClick={copyOrigin} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-[9px] font-black uppercase shadow-sm active:scale-95">COPY</button>
                    </div>
                 </div>
-
-                <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
-                   <p className="text-rose-700 font-bold">⚠️ সতর্ক হোন:</p>
-                   <p className="text-rose-600">আপনি <b>Client ID</b> কপি করছেন তো? <b>Client Secret</b> নয় তো? আইডিটি দেখতে এমন হবে: <br/> <code className="text-[9px] bg-white/50 px-1">12345-abcde.apps.googleusercontent.com</code></p>
-                </div>
-
-                <p>৩. আপনার অ্যাপ যদি <b>Testing Mode</b>-এ থাকে, তবে আপনার ইমেইলটি <b>Test Users</b> লিস্টে যোগ করুন।</p>
              </div>
           </div>
 
@@ -109,8 +199,8 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
               type="text" 
               value={clientId} 
               onChange={e => setClientId(e.target.value)}
-              placeholder="Paste Client ID here (Ends with .apps.googleusercontent.com)"
-              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-mono text-xs border border-slate-100 placeholder:opacity-30"
+              placeholder="Paste Client ID here..."
+              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-mono text-xs border border-slate-100"
             />
           </div>
 
@@ -184,9 +274,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
               ))}
             </tbody>
           </table>
-          <div className="mt-10 pt-4 border-t border-slate-100 text-[9px] text-slate-300 uppercase tracking-widest text-center">
-            End of Report • Powered by Araf Telecom Management System
-          </div>
         </div>
       </div>
     </div>

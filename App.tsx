@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { LiveEntry, Expense, NightEntry, AppSettings, CashEntry, DueEntry, UserProfile } from './types';
+import { LiveEntry, Expense, NightEntry, AppSettings, CashEntry, DueEntry, UserProfile, FullAppState } from './types';
 import { translations } from './translations';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
@@ -12,6 +12,10 @@ import CustomerManagement from './components/CustomerManagement';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [lastSync, setLastSync] = useState<number>(() => {
+    const saved = localStorage.getItem('shop_last_sync');
+    return saved ? Number(saved) : 0;
+  });
   
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('shop_settings');
@@ -67,7 +71,18 @@ const App: React.FC = () => {
     localStorage.setItem('shop_cash_entries', JSON.stringify(cashEntries));
     localStorage.setItem('shop_due_entries', JSON.stringify(dueEntries));
     localStorage.setItem('shop_uploaded_dates', JSON.stringify(uploadedDates));
-  }, [settings, liveEntries, expenses, nightEntries, cashEntries, dueEntries, uploadedDates]);
+    localStorage.setItem('shop_last_sync', lastSync.toString());
+  }, [settings, liveEntries, expenses, nightEntries, cashEntries, dueEntries, uploadedDates, lastSync]);
+
+  const handleSyncSuccess = (cloudData: any) => {
+    if (cloudData.liveEntries) setLiveEntries(cloudData.liveEntries);
+    if (cloudData.expenses) setExpenses(cloudData.expenses);
+    if (cloudData.nightEntries) setNightEntries(cloudData.nightEntries);
+    if (cloudData.cashEntries) setCashEntries(cloudData.cashEntries);
+    if (cloudData.dueEntries) setDueEntries(cloudData.dueEntries);
+    if (cloudData.uploadedDates) setUploadedDates(cloudData.uploadedDates);
+    setLastSync(Date.now());
+  };
 
   const toggleLanguage = () => {
     setSettings(prev => ({ ...prev, language: prev.language === 'bn' ? 'en' : 'bn' }));
@@ -85,7 +100,6 @@ const App: React.FC = () => {
       alert(lang === 'bn' ? "রিকভার করার জন্য সেটিংস থেকে আগে Google Client ID সেট করা থাকতে হবে।" : "Set Google Client ID in settings first to recover.");
       return;
     }
-    alert(lang === 'bn' ? "আপনার জিমেইল ভেরিফাই হয়েছে। এখন প্রবেশ করুন এবং সেটিংস থেকে নতুন পিন দিন।" : "Gmail verified. Login and set new PIN from settings.");
     setIsLoggedIn(true);
   };
 
@@ -100,9 +114,6 @@ const App: React.FC = () => {
     const cashOut = cashEntries.filter(c => c.type === 'out').reduce((sum, c) => sum + c.amount, 0);
     const totalDues = dueEntries.filter(d => !d.isPaid).reduce((sum, d) => sum + d.amount, 0);
 
-    const isTodayClosed = nightEntries.filter(n => n.date === today).length >= 11;
-    const isTodayUploaded = uploadedDates.includes(today);
-
     return {
       todayIncome,
       todayExpense,
@@ -111,10 +122,10 @@ const App: React.FC = () => {
       totalDues,
       monthlyProfit: 0, 
       allTimeProfit: totalIncome - totalExpense,
-      isTodayClosed,
-      isTodayUploaded
+      lastSync,
+      isTodayUploaded: uploadedDates.includes(today)
     };
-  }, [liveEntries, expenses, settings, today, cashEntries, nightEntries, dueEntries, uploadedDates]);
+  }, [liveEntries, expenses, settings, today, cashEntries, dueEntries, uploadedDates, lastSync]);
 
   const handleUpdateDue = (id: string, updates: Partial<DueEntry>) => {
     setDueEntries(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
@@ -172,12 +183,36 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-4xl mx-auto w-full p-4 flex-grow space-y-6">
-        {activeTab === 'dashboard' && <Dashboard stats={stats} liveEntries={liveEntries} expenses={expenses} nightEntries={nightEntries} onGoToReports={() => setActiveTab('reports')} onDeleteLive={deleteLive} onDeleteExpense={deleteExpense} language={lang} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard 
+            stats={stats as any} 
+            liveEntries={liveEntries} 
+            expenses={expenses} 
+            nightEntries={nightEntries} 
+            onGoToReports={() => setActiveTab('reports')} 
+            onDeleteLive={deleteLive} 
+            onDeleteExpense={deleteExpense} 
+            language={lang} 
+          />
+        )}
         {activeTab === 'entry' && <EntryForms onAddLive={e => setLiveEntries([e, ...liveEntries])} onAddExpense={e => setExpenses([e, ...expenses])} onAddNight={n => setNightEntries([n, ...nightEntries])} onDeleteNight={deleteNight} onAddCash={c => setCashEntries([c, ...cashEntries])} nightEntries={nightEntries} language={lang} />}
         {activeTab === 'customers' && <CustomerManagement dueEntries={dueEntries} onAddDue={d => setDueEntries([d, ...dueEntries])} onUpdateDue={handleUpdateDue} onDeleteDuePermanently={handleDeleteDuePermanently} onAddLive={e => setLiveEntries([e, ...liveEntries])} language={lang} />}
         {activeTab === 'reports' && <Reports liveEntries={liveEntries} expenses={expenses} nightEntries={nightEntries} cashEntries={cashEntries} dueEntries={dueEntries} onDeleteLive={deleteLive} onDeleteExpense={deleteExpense} onDeleteNight={deleteNight} onDeleteCash={deleteCash} onDeleteDue={deleteDue} settings={settings} uploadedDates={uploadedDates} onUploadSuccess={(d) => setUploadedDates([...uploadedDates, d])} />}
         {activeTab === 'assistant' && <SmartAssistant liveEntries={liveEntries} expenses={expenses} language={lang} />}
-        {activeTab === 'settings' && <Settings settings={settings} onUpdate={s => setSettings(s)} liveEntries={liveEntries} expenses={expenses} nightEntries={nightEntries} cashEntries={cashEntries} language={lang} />}
+        {activeTab === 'settings' && (
+          <Settings 
+            settings={settings} 
+            onUpdate={s => setSettings(s)} 
+            liveEntries={liveEntries} 
+            expenses={expenses} 
+            nightEntries={nightEntries} 
+            cashEntries={cashEntries} 
+            dueEntries={dueEntries}
+            uploadedDates={uploadedDates}
+            language={lang}
+            onSyncSuccess={handleSyncSuccess}
+          />
+        )}
       </main>
 
       <nav className="fixed bottom-0 w-full bg-white border-t flex justify-around py-4 shadow-2xl z-40 backdrop-blur-md bg-white/90">
