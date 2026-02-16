@@ -16,7 +16,7 @@ interface Props {
 const EntryForms: React.FC<Props> = ({ onAddLive, onAddExpense, onAddNight, onDeleteNight, onAddCash, nightEntries, language }) => {
   const [activeSubTab, setActiveSubTab] = useState<'live' | 'expense' | 'night' | 'cashbox'>('live');
   const today = new Date().toLocaleDateString('en-CA');
-  const t = translations[language as keyof typeof translations].entry;
+  const t = translations[language].entry;
 
   const todayNightEntries = nightEntries.filter(n => n.date === today);
 
@@ -110,7 +110,7 @@ const CashBoxForm = ({ onAdd, language }: { onAdd: (e: CashEntry) => void, langu
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const today = new Date().toLocaleDateString('en-CA');
-  const t = translations[language as keyof typeof translations].entry.cash;
+  const t = translations[language].entry.cash;
 
   const handleEntry = (type: 'in' | 'out') => {
     if (!amount) return alert(language === 'bn' ? 'টাকার পরিমাণ দিন' : 'Enter amount');
@@ -204,7 +204,7 @@ const LiveInputCard = ({ title, type, onAdd, icon, language }: any) => {
 
 const NightInputCard = ({ title, type, onAdd, onDelete, icon, color, existingEntry, language }: any) => {
   const [amount, setAmount] = useState('');
-  const t = translations[language as keyof typeof translations].entry.night;
+  const t = translations[language].entry.night;
   
   return (
     <div className={`${color} p-4 rounded-2xl shadow-sm flex items-center justify-between border ${existingEntry ? 'border-emerald-500 ring-1 ring-emerald-500/10' : 'border-slate-200/50'}`}>
@@ -252,7 +252,7 @@ const NightInputCard = ({ title, type, onAdd, onDelete, icon, color, existingEnt
 const ExpenseForm = ({ onAdd, language }: any) => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const t = translations[language as keyof typeof translations].entry.expense;
+  const t = translations[language].entry.expense;
 
   const quickExpenses = [
     { label: t.rent, value: t.rent },

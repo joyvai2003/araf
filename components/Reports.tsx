@@ -30,7 +30,7 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
     if (typeof window !== 'undefined' && (window as any).google && settings.googleClientId) {
       try {
         tokenClientRef.current = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: settings.googleClientId,
+          client_id: settings.googleClientId.trim(),
           scope: 'https://www.googleapis.com/auth/drive.file',
           callback: '', 
         });
@@ -105,14 +105,24 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
 
   const handleSaveToDrive = async () => {
     if (!reportRef.current) return;
-    if (!settings.googleClientId) {
+    if (!settings.googleClientId || settings.googleClientId === '') {
       alert("Settings থেকে Google Client ID সেট করুন।");
       return;
     }
+    if (!tokenClientRef.current) {
+       alert("গুগল সার্ভিস লোড হতে পারছে না। Client ID সঠিক কিনা নিশ্চিত করুন।");
+       return;
+    }
+
     setUploadStatus('generating');
     try {
       tokenClientRef.current.callback = async (response: any) => {
-        if (response.error) { setUploadStatus('error'); return; }
+        if (response.error) { 
+           console.error("Auth Error:", response.error);
+           setUploadStatus('error'); 
+           alert(`Error: ${response.error_description || response.error}`);
+           return; 
+        }
         const accessToken = response.access_token;
         const element = reportRef.current;
         const opt = {
@@ -125,14 +135,23 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
         // @ts-ignore
         const pdfBlob = await window.html2pdf().from(element).set(opt).output('blob');
         setUploadStatus('uploading');
-        await uploadFileToDrive(pdfBlob, accessToken);
-        onUploadSuccess(filterDate);
-        setUploadStatus('success');
-        setTimeout(() => setUploadStatus('idle'), 3000);
+        try {
+           await uploadFileToDrive(pdfBlob, accessToken);
+           onUploadSuccess(filterDate);
+           setUploadStatus('success');
+           setTimeout(() => setUploadStatus('idle'), 3000);
+        } catch (e) {
+           console.error("Upload process error:", e);
+           setUploadStatus('error');
+           alert("ফাইল আপলোড করতে সমস্যা হয়েছে।");
+           setTimeout(() => setUploadStatus('idle'), 3000);
+        }
       };
       tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
     } catch (e) { 
+      console.error("Drive access request error:", e);
       setUploadStatus('error');
+      alert("গুগল ড্রাইভ এক্সেস রিকোয়েস্ট ব্যর্থ হয়েছে।");
     }
   };
 
@@ -185,8 +204,8 @@ const Reports: React.FC<Props> = ({ liveEntries, expenses, nightEntries, cashEnt
           <button onClick={handleDownloadPDF} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-md">
             📥 Download PDF
           </button>
-          <button onClick={handleSaveToDrive} disabled={uploadStatus !== 'idle'} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${uploadStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
-            {uploadStatus === 'idle' ? '📤 Cloud Backup' : uploadStatus === 'generating' ? '⏳ Generating PDF' : '🚀 Uploading...'}
+          <button onClick={handleSaveToDrive} disabled={uploadStatus !== 'idle'} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${uploadStatus === 'success' ? 'bg-emerald-500 text-white' : uploadStatus === 'error' ? 'bg-rose-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+            {uploadStatus === 'idle' ? '📤 Cloud Backup' : uploadStatus === 'generating' ? '⏳ Generating PDF' : uploadStatus === 'error' ? '❌ Error' : '🚀 Uploading...'}
           </button>
           <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none" />
         </div>

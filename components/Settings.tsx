@@ -21,15 +21,22 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
   const pdfExportRef = useRef<HTMLDivElement>(null);
   
   const t = translations[language].settings;
+  const currentOrigin = window.location.origin;
 
   const handleSave = () => {
+    const cleanId = clientId.trim();
     onUpdate({ 
       ...settings,
       password: pass, 
       openingCash: Number(cash),
-      googleClientId: clientId.trim()
+      googleClientId: cleanId
     });
     alert(language === 'bn' ? 'সেটিংস সফলভাবে সেভ হয়েছে!' : 'Settings saved successfully!');
+  };
+
+  const copyOrigin = () => {
+    navigator.clipboard.writeText(currentOrigin);
+    alert(language === 'bn' ? 'ইউআরএল কপি হয়েছে!' : 'URL Copied!');
   };
 
   const exportToPDF = async () => {
@@ -69,22 +76,31 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
         </h2>
         
         <div className="space-y-6">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest px-1">{t.language}</label>
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl">
-              <button 
-                onClick={() => onUpdate({ ...settings, language: 'bn' })} 
-                className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${settings.language === 'bn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400'}`}
-              >
-                বাংলা
-              </button>
-              <button 
-                onClick={() => onUpdate({ ...settings, language: 'en' })} 
-                className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${settings.language === 'en' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400'}`}
-              >
-                English
-              </button>
-            </div>
+          <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100 space-y-4">
+             <div className="flex items-center gap-2">
+                <span className="text-xl">🛠️</span>
+                <p className="text-[11px] font-black text-blue-800 uppercase tracking-widest">
+                  {language === 'bn' ? 'গুগল ক্লাউড সেটআপ গাইড' : 'Google Cloud Setup Guide'}
+                </p>
+             </div>
+             <div className="text-[11px] text-blue-700 space-y-3 leading-relaxed font-medium">
+                <p>১. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline font-bold">Google Cloud Console</a>-এ গিয়ে <b>Web Application</b> আইডি তৈরি করুন।</p>
+                
+                <div className="bg-white/60 p-3 rounded-2xl space-y-2">
+                   <p className="font-bold text-blue-900 uppercase text-[9px]">ধাপ ২: এই ইউআরএলটি 'Authorized JavaScript Origins' এ দিন:</p>
+                   <div className="flex items-center gap-2">
+                      <code className="text-[10px] flex-1 break-all font-mono font-bold bg-blue-100 p-2 rounded-lg">{currentOrigin}</code>
+                      <button onClick={copyOrigin} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-[9px] font-black uppercase shadow-sm active:scale-95">COPY</button>
+                   </div>
+                </div>
+
+                <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                   <p className="text-rose-700 font-bold">⚠️ সতর্ক হোন:</p>
+                   <p className="text-rose-600">আপনি <b>Client ID</b> কপি করছেন তো? <b>Client Secret</b> নয় তো? আইডিটি দেখতে এমন হবে: <br/> <code className="text-[9px] bg-white/50 px-1">12345-abcde.apps.googleusercontent.com</code></p>
+                </div>
+
+                <p>৩. আপনার অ্যাপ যদি <b>Testing Mode</b>-এ থাকে, তবে আপনার ইমেইলটি <b>Test Users</b> লিস্টে যোগ করুন।</p>
+             </div>
           </div>
 
           <div>
@@ -93,7 +109,8 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
               type="text" 
               value={clientId} 
               onChange={e => setClientId(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-mono text-xs"
+              placeholder="Paste Client ID here (Ends with .apps.googleusercontent.com)"
+              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-mono text-xs border border-slate-100 placeholder:opacity-30"
             />
           </div>
 
@@ -103,7 +120,7 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
               type="text" 
               value={pass} 
               onChange={e => setPass(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-black text-xl tracking-[0.4em]"
+              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-black text-xl tracking-[0.4em] border border-slate-100"
             />
           </div>
 
@@ -113,13 +130,13 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
               type="number" 
               value={cash} 
               onChange={e => setCash(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-black text-xl text-emerald-600"
+              className="w-full px-5 py-4 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-emerald-500/10 outline-none font-black text-xl text-emerald-600 border border-slate-100"
             />
           </div>
 
           <button 
             onClick={handleSave}
-            className="w-full bg-slate-900 text-white font-black py-5 rounded-[1.8rem] text-xs uppercase tracking-widest"
+            className="w-full bg-slate-900 text-white font-black py-5 rounded-[1.8rem] text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all"
           >
             {t.update}
           </button>
@@ -139,7 +156,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdate, liveEntries, expenses, 
         </button>
       </div>
 
-      {/* OFFSCREEN CONTAINER FOR PDF EXPORT */}
       <div className="pdf-offscreen">
         <div ref={pdfExportRef} className="p-12 bg-white font-sans text-slate-900">
           <div className="border-b-4 border-slate-900 pb-6 mb-8">
